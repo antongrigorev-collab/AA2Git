@@ -1,0 +1,4 @@
+{"sessionId":"2379fb","hypothesisId":"H1","location":"RoutePlanner.search","message":"best route stored","data":{"size":1,"lastId":"LiftA","lastTransit":true},"timestamp":1772644958714}
+{"sessionId":"2379fb","hypothesisId":"H1","location":"RoutePlanner.search","message":"best route stored","data":{"size":9,"lastId":"LiftA","lastTransit":true},"timestamp":1772644958777}
+{"sessionId":"2379fb","hypothesisId":"H1","location":"RoutePlanner.search","message":"best route stored","data":{"size":9,"lastId":"LiftA","lastTransit":true},"timestamp":1772644958777}
+{"sessionId":"2379fb","hypothesisId":"H2","location":"CommandProcessor.handleShowRoute","message":"show route output","data":{"remainingSize":9,"lastId":"LiftA","output":"LiftA Piste1 LiftB Piste3 LiftA Piste1 LiftB Piste3 LiftA"},"timestamp":1772644959549}

@@ -1,0 +1,4 @@
+{"sessionId":"883af5","hypothesisId":"H1","location":"CommandProcessor.handleAlternative:entry","message":"alternative called","data":{"pendingNextId":"Piste3"},"timestamp":1772646659982}
+{"sessionId":"883af5","hypothesisId":"H2-H4","location":"CommandProcessor.handleAlternative:noAlternative","message":"planner returned null","data":{"currentNodeId":"LiftB"},"timestamp":1772646660007}
+{"sessionId":"883af5","hypothesisId":"H1","location":"CommandProcessor.handleAlternative:entry","message":"alternative called","data":{"pendingNextId":"Piste3"},"timestamp":1772646675814}
+{"sessionId":"883af5","hypothesisId":"post-fix","location":"CommandProcessor.handleAlternative:success","message":"avoided","data":{"avoidedId":"Piste3"},"timestamp":1772646675849}

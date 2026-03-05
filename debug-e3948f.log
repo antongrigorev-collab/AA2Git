@@ -1,0 +1,2 @@
+{"sessionId":"e3948f","location":"RoutePlanner.java:54","message":"route built","data":{"size":9,"lastId":"LiftA","lastIsTransit":true},"timestamp":1772645148917,"hypothesisId":"H1"}
+{"sessionId":"e3948f","location":"CommandProcessor.java:showRoute","message":"showRoute remaining","data":{"count":8,"lastId":"Piste3","lastIsTransit":false,"ids":"LiftA,Piste1,LiftB,Piste3,LiftA,Piste1,LiftB,Piste3"},"timestamp":1772645150080,"hypothesisId":"H3"}
