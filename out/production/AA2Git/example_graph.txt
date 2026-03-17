@@ -1,12 +1,12 @@
 graph
-    LiftA[[LiftA<br/>GONDOLA;08:00;16:00;10;2]]
-    Piste1([Piste1<br/>BLUE;ICY;2000;500])
-    LiftB[LiftB<br/>CHAIRLIFT;08:30;16:15;5;1]
-    Piste2([Piste2<br/>RED;BUMPY;2000;200])
-    Piste3([Piste3<br/>BLACK;REGULAR;2000;1000])
-    LiftA --> Piste1
-    Piste1 --> LiftB
-    LiftB --> Piste2
-    LiftB --> Piste3
-    Piste2 --> LiftB
-    Piste3 --> LiftA
+ LiftA[[LiftA<br/>GONDOLA;08:00;16:00;10;2]]
+ Piste1([Piste1<br/>BLUE;ICY;2000;500])
+ LiftB[LiftB<br/>CHAIRLIFT;08:30;16:15;5;1]
+ Piste2([Piste2<br/>RED;BUMPY;2000;200])
+ Piste3([Piste3<br/>BLACK;REGULAR;2000;1000])
+ LiftA --> Piste1
+ Piste1 --> LiftB
+ LiftB --> Piste2
+ LiftB --> Piste3
+ Piste2 --> LiftB
+ Piste3 --> LiftA

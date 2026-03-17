@@ -12,8 +12,24 @@ import java.util.Set;
 
 import edu.kit.kastel.exceptions.SkiAreaParseException;
 
+/**
+ * Parses ski area definitions written in the Mermaid-based format specified in
+ * the assignment and builds a validated {@link SkiArea} instance.
+ *
+ * @author usylb
+ */
 public class SkiAreaParser {
 
+    /**
+     * Parses the ski area definition from the file at the given path.
+     *
+     * @param path the path to the area definition file
+     * @return the parsed and validated ski area
+     * @throws IOException            if reading the file fails
+     * @throws SkiAreaParseException  if the file content does not follow the
+     *                                required grammar or violates structural
+     *                                constraints
+     */
     public SkiArea parse(String path) throws IOException, SkiAreaParseException {
         try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
             String line = reader.readLine();

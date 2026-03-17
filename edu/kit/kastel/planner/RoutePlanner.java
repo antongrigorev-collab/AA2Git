@@ -15,16 +15,39 @@ import edu.kit.kastel.exceptions.RoutePlanningException;
 import edu.kit.kastel.user.Skill;
 import edu.kit.kastel.user.SkierContext;
 
+/**
+ * Computes optimal routes through a {@link SkiArea} for a given skier context.
+ * <p>
+ * Routes are evaluated according to the currently configured {@link Goal} and
+ * the preference tie-breaker rules.
+ *
+ * @author usylb
+ */
 public class RoutePlanner {
 
     private final SkiArea area;
     private final SkierContext context;
 
+    /**
+     * Creates a new planner for the given ski area and skier context.
+     *
+     * @param area    the ski area graph to plan routes in
+     * @param context the current skier configuration (skill, goal, preferences)
+     */
     public RoutePlanner(SkiArea area, SkierContext context) {
         this.area = area;
         this.context = context;
     }
 
+    /**
+     * Plans the best route starting from a transit lift within a time window.
+     *
+     * @param startId   id of the start node (must be a transit lift)
+     * @param startTime start time in minutes
+     * @param endTime   end time in minutes (exclusive upper bound for finishing)
+     * @return the planned route
+     * @throws RoutePlanningException if planning is not possible or no route exists
+     */
     public Route planRoute(String startId, int startTime, int endTime) throws RoutePlanningException {
         AreaNode start = area.getNode(startId);
         if (!(start instanceof Lift) || !((Lift) start).isTransit()) {
@@ -46,10 +69,11 @@ public class RoutePlanner {
         currentNodes.add(start);
         currentTimes.add(startTime);
 
-        search(start, startTime, endTime, currentNodes, currentTimes, currentSlopes, uniqueSlopes, best);
+        SearchContext ctx = new SearchContext(endTime, currentNodes, currentTimes, currentSlopes, uniqueSlopes, best);
+        search(start, startTime, ctx);
 
         if (best.nodes == null) {
-            throw new RoutePlanningException("Error, no route");
+            throw new RoutePlanningException("Error, no route possible in given time window");
         }
         List<AreaNode> nodesForRoute = best.nodes;
         List<Integer> timesForRoute = best.times;
@@ -68,7 +92,15 @@ public class RoutePlanner {
     }
 
     /**
-     * Plans an alternative route from current position that does not use avoidNextId as immediate next step.
+     * Plans an alternative route from the current position that avoids a
+     * specific immediate next step.
+     *
+     * @param startId      id of the current position
+     * @param startTime    current time in minutes
+     * @param endTime      end time in minutes
+     * @param avoidNextId  id of the step that must not be used as immediate next step
+     * @return the planned alternative route, or {@code null} if none exists
+     * @throws RoutePlanningException if input data is invalid
      */
     public Route planAlternativeRoute(String startId, int startTime, int endTime, String avoidNextId)
             throws RoutePlanningException {
@@ -89,8 +121,10 @@ public class RoutePlanner {
         List<Slope> currentSlopes = new ArrayList<>();
         Set<Slope> uniqueSlopes = new HashSet<>();
 
-        searchAlternative(start, startTime, endTime, startId, avoidNextId,
-                currentNodes, currentTimes, currentSlopes, uniqueSlopes, best);
+        SearchContext baseContext = new SearchContext(endTime, currentNodes, currentTimes,
+                currentSlopes, uniqueSlopes, best);
+        AlternativeSearchContext ctx = new AlternativeSearchContext(startId, avoidNextId, baseContext);
+        searchAlternative(start, startTime, ctx);
 
         if (best.nodes == null) {
             return null;
@@ -111,174 +145,157 @@ public class RoutePlanner {
         return new Route(nodesForRoute, timesForRoute);
     }
 
-    private void searchAlternative(AreaNode node, int currentTime, int endTime,
-                        String startId, String avoidNextId,
-                        List<AreaNode> nodesSoFar,
-                        List<Integer> timesSoFar,
-                        List<Slope> slopesSoFar,
-                        Set<Slope> uniqueSlopes,
-                        BestRoute best) {
-        if (node instanceof Lift && ((Lift) node).isTransit() && currentTime <= endTime) {
-            int utility = computeUtility(slopesSoFar, uniqueSlopes);
-            int preferenceScore = 0;
-            for (Slope slope : slopesSoFar) {
-                preferenceScore += context.getPreferences().score(slope);
-            }
-            StringBuilder routeBuilder = new StringBuilder();
-            for (int i = 0; i < nodesSoFar.size(); i++) {
-                if (i > 0) {
-                    routeBuilder.append(' ');
-                }
-                routeBuilder.append(nodesSoFar.get(i).getId());
-            }
-            String routeString = routeBuilder.toString();
-            boolean takeAsBest = false;
-            if (best.nodes == null) {
-                takeAsBest = true;
-            } else if (utility > best.utility) {
-                takeAsBest = true;
-            } else if (utility == best.utility) {
-                if (preferenceScore > best.preferenceScore) {
-                    takeAsBest = true;
-                } else if (preferenceScore == best.preferenceScore
-                        && routeString.compareTo(best.routeString) < 0) {
-                    takeAsBest = true;
-                }
-            }
-            if (takeAsBest) {
-                best.utility = utility;
-                best.preferenceScore = preferenceScore;
-                best.routeString = routeString;
-                best.nodes = new ArrayList<>(nodesSoFar);
-                best.times = new ArrayList<>(timesSoFar);
-            }
-        }
+    private void searchAlternative(AreaNode node, int currentTime, AlternativeSearchContext ctx) {
+        considerAsBestIfTransit(node, currentTime, ctx);
 
         for (AreaNode successor : area.getSuccessors(node)) {
-            if (node.getId().equals(startId) && nodesSoFar.isEmpty() && successor.getId().equals(avoidNextId)) {
+            if (ctx.shouldAvoidImmediateNext(node, successor)) {
                 continue;
             }
             if (successor instanceof Lift) {
-                Lift lift = (Lift) successor;
-                int arrival = currentTime + lift.getWaitingTimeMinutes();
-                if (arrival < lift.getStartTimeMinutes()
-                        || arrival > lift.getEndTimeMinutes()) {
-                    continue;
-                }
-                int finishTime = arrival + lift.getRideDurationMinutes();
-                if (finishTime > endTime) {
-                    continue;
-                }
-                nodesSoFar.add(successor);
-                timesSoFar.add(finishTime);
-                searchAlternative(successor, finishTime, endTime, startId, avoidNextId,
-                        nodesSoFar, timesSoFar, slopesSoFar, uniqueSlopes, best);
-                nodesSoFar.remove(nodesSoFar.size() - 1);
-                timesSoFar.remove(timesSoFar.size() - 1);
+                expandLiftAlternative((Lift) successor, currentTime, ctx);
             } else if (successor instanceof Slope) {
-                Slope slope = (Slope) successor;
-                int duration = computeSlopeMinutes(slope);
-                int finishTime = currentTime + duration;
-                if (finishTime > endTime) {
-                    continue;
-                }
-                nodesSoFar.add(successor);
-                timesSoFar.add(finishTime);
-                slopesSoFar.add(slope);
-                boolean addedUnique = uniqueSlopes.add(slope);
-                searchAlternative(successor, finishTime, endTime, startId, avoidNextId,
-                        nodesSoFar, timesSoFar, slopesSoFar, uniqueSlopes, best);
-                if (addedUnique) {
-                    uniqueSlopes.remove(slope);
-                }
-                slopesSoFar.remove(slopesSoFar.size() - 1);
-                nodesSoFar.remove(nodesSoFar.size() - 1);
-                timesSoFar.remove(timesSoFar.size() - 1);
+                expandSlopeAlternative((Slope) successor, currentTime, ctx);
             }
         }
     }
 
-    private void search(AreaNode node, int currentTime, int endTime,
-                        List<AreaNode> nodesSoFar,
-                        List<Integer> timesSoFar,
-                        List<Slope> slopesSoFar,
-                        Set<Slope> uniqueSlopes,
-                        BestRoute best) {
-        if (node instanceof Lift && ((Lift) node).isTransit() && currentTime <= endTime) {
-            int utility = computeUtility(slopesSoFar, uniqueSlopes);
-            int preferenceScore = 0;
-            for (Slope slope : slopesSoFar) {
-                preferenceScore += context.getPreferences().score(slope);
-            }
-            StringBuilder routeBuilder = new StringBuilder();
-            for (int i = 0; i < nodesSoFar.size(); i++) {
-                if (i > 0) {
-                    routeBuilder.append(' ');
-                }
-                routeBuilder.append(nodesSoFar.get(i).getId());
-            }
-            String routeString = routeBuilder.toString();
-            boolean takeAsBest = false;
-            if (best.nodes == null) {
-                takeAsBest = true;
-            } else if (utility > best.utility) {
-                takeAsBest = true;
-            } else if (utility == best.utility) {
-                if (preferenceScore > best.preferenceScore) {
-                    takeAsBest = true;
-                } else if (preferenceScore == best.preferenceScore
-                        && routeString.compareTo(best.routeString) < 0) {
-                    takeAsBest = true;
-                }
-            }
-            if (takeAsBest) {
-                best.utility = utility;
-                best.preferenceScore = preferenceScore;
-                best.routeString = routeString;
-                best.nodes = new ArrayList<>(nodesSoFar);
-                best.times = new ArrayList<>(timesSoFar);
-            }
-        }
+    private void search(AreaNode node, int currentTime, SearchContext ctx) {
+        considerAsBestIfTransit(node, currentTime, ctx);
 
         for (AreaNode successor : area.getSuccessors(node)) {
             if (successor instanceof Lift) {
-                Lift lift = (Lift) successor;
-                int arrival = currentTime + lift.getWaitingTimeMinutes();
-                if (arrival < lift.getStartTimeMinutes()
-                        || arrival > lift.getEndTimeMinutes()) {
-                    continue;
-                }
-                int finishTime = arrival + lift.getRideDurationMinutes();
-                if (finishTime > endTime) {
-                    continue;
-                }
-                nodesSoFar.add(successor);
-                timesSoFar.add(finishTime);
-                search(successor, finishTime, endTime, nodesSoFar, timesSoFar,
-                        slopesSoFar, uniqueSlopes, best);
-                nodesSoFar.remove(nodesSoFar.size() - 1);
-                timesSoFar.remove(timesSoFar.size() - 1);
+                expandLift((Lift) successor, currentTime, ctx);
             } else if (successor instanceof Slope) {
-                Slope slope = (Slope) successor;
-                int duration = computeSlopeMinutes(slope);
-                int finishTime = currentTime + duration;
-                if (finishTime > endTime) {
-                    continue;
-                }
-                nodesSoFar.add(successor);
-                timesSoFar.add(finishTime);
-                slopesSoFar.add(slope);
-                boolean addedUnique = uniqueSlopes.add(slope);
-                search(successor, finishTime, endTime, nodesSoFar, timesSoFar,
-                        slopesSoFar, uniqueSlopes, best);
-                if (addedUnique) {
-                    uniqueSlopes.remove(slope);
-                }
-                slopesSoFar.remove(slopesSoFar.size() - 1);
-                nodesSoFar.remove(nodesSoFar.size() - 1);
-                timesSoFar.remove(timesSoFar.size() - 1);
+                expandSlope((Slope) successor, currentTime, ctx);
             }
         }
+    }
+
+    private void considerAsBestIfTransit(AreaNode node, int currentTime, SearchContext ctx) {
+        if (node instanceof Lift && ((Lift) node).isTransit() && currentTime <= ctx.endTime) {
+            considerAsBest(ctx.nodesSoFar, ctx.timesSoFar, ctx.slopesSoFar, ctx.uniqueSlopes, ctx.best);
+        }
+    }
+
+    private void considerAsBest(List<AreaNode> nodesSoFar,
+                                List<Integer> timesSoFar,
+                                List<Slope> slopesSoFar,
+                                Set<Slope> uniqueSlopes,
+                                BestRoute best) {
+        int utility = computeUtility(slopesSoFar, uniqueSlopes);
+        int preferenceScore = computePreferenceScore(slopesSoFar);
+        String routeString = toRouteString(nodesSoFar);
+
+        boolean takeAsBest = false;
+        if (best.nodes == null) {
+            takeAsBest = true;
+        } else if (utility > best.utility) {
+            takeAsBest = true;
+        } else if (utility == best.utility) {
+            if (preferenceScore > best.preferenceScore) {
+                takeAsBest = true;
+            } else if (preferenceScore == best.preferenceScore && routeString.compareTo(best.routeString) < 0) {
+                takeAsBest = true;
+            }
+        }
+
+        if (takeAsBest) {
+            best.utility = utility;
+            best.preferenceScore = preferenceScore;
+            best.routeString = routeString;
+            best.nodes = new ArrayList<>(nodesSoFar);
+            best.times = new ArrayList<>(timesSoFar);
+        }
+    }
+
+    private int computePreferenceScore(List<Slope> slopesSoFar) {
+        int preferenceScore = 0;
+        for (Slope slope : slopesSoFar) {
+            preferenceScore += context.getPreferences().score(slope);
+        }
+        return preferenceScore;
+    }
+
+    private String toRouteString(List<AreaNode> nodesSoFar) {
+        StringBuilder routeBuilder = new StringBuilder();
+        for (int i = 0; i < nodesSoFar.size(); i++) {
+            if (i > 0) {
+                routeBuilder.append(' ');
+            }
+            routeBuilder.append(nodesSoFar.get(i).getId());
+        }
+        return routeBuilder.toString();
+    }
+
+    private void expandLift(Lift lift, int currentTime, SearchContext ctx) {
+        if (!lift.isUsableAt(currentTime)) {
+            return;
+        }
+        int finishTime = currentTime + lift.getStepDurationMinutes();
+        if (finishTime > ctx.endTime) {
+            return;
+        }
+
+        ctx.nodesSoFar.add(lift);
+        ctx.timesSoFar.add(finishTime);
+        search(lift, finishTime, ctx);
+        ctx.nodesSoFar.remove(ctx.nodesSoFar.size() - 1);
+        ctx.timesSoFar.remove(ctx.timesSoFar.size() - 1);
+    }
+
+    private void expandSlope(Slope slope, int currentTime, SearchContext ctx) {
+        int finishTime = currentTime + computeSlopeMinutes(slope);
+        if (finishTime > ctx.endTime) {
+            return;
+        }
+
+        ctx.nodesSoFar.add(slope);
+        ctx.timesSoFar.add(finishTime);
+        ctx.slopesSoFar.add(slope);
+        boolean addedUnique = ctx.uniqueSlopes.add(slope);
+        search(slope, finishTime, ctx);
+        if (addedUnique) {
+            ctx.uniqueSlopes.remove(slope);
+        }
+        ctx.slopesSoFar.remove(ctx.slopesSoFar.size() - 1);
+        ctx.nodesSoFar.remove(ctx.nodesSoFar.size() - 1);
+        ctx.timesSoFar.remove(ctx.timesSoFar.size() - 1);
+    }
+
+    private void expandLiftAlternative(Lift lift, int currentTime, AlternativeSearchContext ctx) {
+        if (!lift.isUsableAt(currentTime)) {
+            return;
+        }
+        int finishTime = currentTime + lift.getStepDurationMinutes();
+        if (finishTime > ctx.endTime) {
+            return;
+        }
+
+        ctx.nodesSoFar.add(lift);
+        ctx.timesSoFar.add(finishTime);
+        searchAlternative(lift, finishTime, ctx);
+        ctx.nodesSoFar.remove(ctx.nodesSoFar.size() - 1);
+        ctx.timesSoFar.remove(ctx.timesSoFar.size() - 1);
+    }
+
+    private void expandSlopeAlternative(Slope slope, int currentTime, AlternativeSearchContext ctx) {
+        int finishTime = currentTime + computeSlopeMinutes(slope);
+        if (finishTime > ctx.endTime) {
+            return;
+        }
+
+        ctx.nodesSoFar.add(slope);
+        ctx.timesSoFar.add(finishTime);
+        ctx.slopesSoFar.add(slope);
+        boolean addedUnique = ctx.uniqueSlopes.add(slope);
+        searchAlternative(slope, finishTime, ctx);
+        if (addedUnique) {
+            ctx.uniqueSlopes.remove(slope);
+        }
+        ctx.slopesSoFar.remove(ctx.slopesSoFar.size() - 1);
+        ctx.nodesSoFar.remove(ctx.nodesSoFar.size() - 1);
+        ctx.timesSoFar.remove(ctx.timesSoFar.size() - 1);
     }
 
     private int computeSlopeMinutes(Slope slope) {
@@ -345,12 +362,5 @@ public class RoutePlanner {
         return 0;
     }
 
-    private static class BestRoute {
-        List<AreaNode> nodes;
-        List<Integer> times;
-        int utility;
-        int preferenceScore;
-        String routeString;
-    }
 }
 
