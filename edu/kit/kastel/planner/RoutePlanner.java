@@ -183,6 +183,9 @@ public class RoutePlanner {
                                 List<Slope> slopesSoFar,
                                 Set<Slope> uniqueSlopes,
                                 BestRoute best) {
+        if (slopesSoFar.isEmpty()) {
+            return;
+        }
         int utility = computeUtility(slopesSoFar, uniqueSlopes);
         int preferenceScore = computePreferenceScore(slopesSoFar);
         String routeString = toRouteString(nodesSoFar);
@@ -229,10 +232,12 @@ public class RoutePlanner {
     }
 
     private void expandLift(Lift lift, int currentTime, SearchContext ctx) {
-        if (!lift.isUsableAt(currentTime)) {
+        int arrivalWithWaiting = currentTime + lift.getWaitingTimeMinutes();
+        int departureTime = Math.max(arrivalWithWaiting, lift.getStartTimeMinutes());
+        if (departureTime > lift.getEndTimeMinutes()) {
             return;
         }
-        int finishTime = currentTime + lift.getStepDurationMinutes();
+        int finishTime = departureTime + lift.getRideDurationMinutes();
         if (finishTime > ctx.endTime) {
             return;
         }
@@ -264,10 +269,12 @@ public class RoutePlanner {
     }
 
     private void expandLiftAlternative(Lift lift, int currentTime, AlternativeSearchContext ctx) {
-        if (!lift.isUsableAt(currentTime)) {
+        int arrivalWithWaiting = currentTime + lift.getWaitingTimeMinutes();
+        int departureTime = Math.max(arrivalWithWaiting, lift.getStartTimeMinutes());
+        if (departureTime > lift.getEndTimeMinutes()) {
             return;
         }
-        int finishTime = currentTime + lift.getStepDurationMinutes();
+        int finishTime = departureTime + lift.getRideDurationMinutes();
         if (finishTime > ctx.endTime) {
             return;
         }

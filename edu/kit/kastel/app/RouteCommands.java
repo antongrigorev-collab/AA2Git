@@ -38,12 +38,14 @@ class RouteCommands {
         if (currentRoute.isFinished()) {
             System.out.println("route finished!");
             processor.setPendingNextId(null);
+            processor.setCurrentRoute(null);
             return;
         }
         AreaNode next = currentRoute.getNextNode();
         if (next == null) {
             System.out.println("route finished!");
             processor.setPendingNextId(null);
+            processor.setCurrentRoute(null);
             return;
         }
         processor.setPendingNextId(next.getId());
@@ -83,8 +85,8 @@ class RouteCommands {
             return;
         }
         List<AreaNode> remaining = currentRoute.getRemainingNodes();
-        if (remaining.isEmpty()) {
-            System.out.println();
+        if (remaining.isEmpty() || currentRoute.isFinished()) {
+            System.out.println("Error, no route");
             return;
         }
         StringBuilder builder = new StringBuilder();

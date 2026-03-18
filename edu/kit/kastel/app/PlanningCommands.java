@@ -1,6 +1,7 @@
 package edu.kit.kastel.app;
 
 import edu.kit.kastel.exceptions.RoutePlanningException;
+import edu.kit.kastel.planner.Route;
 import edu.kit.kastel.planner.RoutePlanner;
 
 /**
@@ -27,6 +28,11 @@ class PlanningCommands {
      * @param args the raw argument string after the {@code plan} keyword
      */
     void handlePlan(String args) {
+        Route currentRoute = processor.getCurrentRoute();
+        if (currentRoute != null && !currentRoute.isFinished()) {
+            System.out.println("Error, route already planned");
+            return;
+        }
         if (processor.getCurrentArea() == null) {
             System.out.println("Error, no area loaded");
             return;
