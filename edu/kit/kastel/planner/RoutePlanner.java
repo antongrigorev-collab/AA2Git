@@ -88,6 +88,7 @@ public class RoutePlanner {
                 }
             }
         }
+
         return new Route(nodesForRoute, timesForRoute);
     }
 

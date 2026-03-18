@@ -89,6 +89,7 @@ class RouteCommands {
             System.out.println("Error, no route");
             return;
         }
+
         StringBuilder builder = new StringBuilder();
         for (int i = 0; i < remaining.size(); i++) {
             if (i > 0) {
@@ -97,6 +98,9 @@ class RouteCommands {
             builder.append(remaining.get(i).getId());
         }
         System.out.println(builder.toString());
+        // Consumes the most recently suggested next-step: "alternative" and "take" are only allowed directly
+        // after "next". Any other command (including "show route") invalidates that pending step.
+        processor.setPendingNextId(null);
     }
 
     /**

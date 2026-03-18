@@ -1,9 +1,17 @@
 package edu.kit.kastel.app;
 
+import edu.kit.kastel.area.AreaNode;
+import edu.kit.kastel.area.Lift;
 import edu.kit.kastel.area.Difficulty;
 import edu.kit.kastel.area.Surface;
+import edu.kit.kastel.exceptions.RoutePlanningException;
 import edu.kit.kastel.planner.Goal;
+import edu.kit.kastel.planner.RoutePlanner;
+import edu.kit.kastel.planner.Route;
 import edu.kit.kastel.user.Skill;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Implements commands that update the skier context (skill, goal, preferences).
@@ -28,6 +36,7 @@ class PreferenceCommands {
      */
     void handleResetPreferences() {
         processor.getSkierContext().getPreferences().reset();
+        maybeReplanCurrentRouteAfterContextChange();
     }
 
     /**
@@ -52,6 +61,7 @@ class PreferenceCommands {
             return;
         }
         processor.getSkierContext().setSkill(matchedSkill);
+        maybeReplanCurrentRouteAfterContextChange();
     }
 
     /**
@@ -76,6 +86,7 @@ class PreferenceCommands {
             return;
         }
         processor.getSkierContext().setGoal(matchedGoal);
+        maybeReplanCurrentRouteAfterContextChange();
     }
 
     /**
@@ -95,6 +106,7 @@ class PreferenceCommands {
                 return;
             }
             processor.getSkierContext().getPreferences().likeDifficulty(difficulty);
+            maybeReplanCurrentRouteAfterContextChange();
             return;
         }
         if (isSurface(value)) {
@@ -104,6 +116,7 @@ class PreferenceCommands {
                 return;
             }
             processor.getSkierContext().getPreferences().likeSurface(surface);
+            maybeReplanCurrentRouteAfterContextChange();
             return;
         }
         System.out.println("Error, invalid preference");
@@ -126,6 +139,7 @@ class PreferenceCommands {
                 return;
             }
             processor.getSkierContext().getPreferences().dislikeDifficulty(difficulty);
+            maybeReplanCurrentRouteAfterContextChange();
             return;
         }
         if (isSurface(value)) {
@@ -135,6 +149,7 @@ class PreferenceCommands {
                 return;
             }
             processor.getSkierContext().getPreferences().dislikeSurface(surface);
+            maybeReplanCurrentRouteAfterContextChange();
             return;
         }
         System.out.println("Error, invalid preference");
@@ -164,6 +179,41 @@ class PreferenceCommands {
 
     private boolean isSurface(String value) {
         return "REGULAR".equals(value) || "ICY".equals(value) || "BUMPY".equals(value);
+    }
+
+    private void maybeReplanCurrentRouteAfterContextChange() {
+        Route currentRoute = processor.getCurrentRoute();
+        Integer planEndTime = processor.getPlanEndTime();
+        if (currentRoute == null || planEndTime == null || currentRoute.isFinished()) {
+            return;
+        }
+
+        AreaNode next = currentRoute.getNextNode();
+        if (!(next instanceof Lift)) {
+            return;
+        }
+        Lift nextLift = (Lift) next;
+        if (!nextLift.isTransit()) {
+            return;
+        }
+
+        int startTime = currentRoute.getCurrentTime();
+        RoutePlanner planner = new RoutePlanner(processor.getCurrentArea(), processor.getSkierContext());
+        try {
+            Route replanned = planner.planRoute(nextLift.getId(), startTime, planEndTime);
+
+            int idx = currentRoute.getCurrentIndex();
+            List<AreaNode> mergedNodes = new ArrayList<>(currentRoute.getNodes().subList(0, idx));
+            mergedNodes.addAll(replanned.getNodes());
+
+            List<Integer> mergedTimes = new ArrayList<>(currentRoute.getTimes().subList(0, idx));
+            mergedTimes.addAll(replanned.getTimes());
+
+            processor.setCurrentRoute(new Route(mergedNodes, mergedTimes, idx));
+            processor.setPendingNextId(null);
+        } catch (RoutePlanningException ignored) {
+            // Keep the existing route if replanning fails.
+        }
     }
 }
 
